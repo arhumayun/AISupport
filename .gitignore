@@ -15,6 +15,9 @@ dist/
 
 # Local MLOps/runtime state (added in later phases)
 .dvc/cache/
+.dvc/site-cache/
+.dvc-storage/
+.metaflow/
 artifacts/
 data/processed/
 mlartifacts/

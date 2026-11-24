@@ -1,0 +1,6 @@
+outs:
+- md5: 92d7d21f422358846a17401209fe952f.dir
+  size: 3904
+  nfiles: 11
+  hash: md5
+  path: student

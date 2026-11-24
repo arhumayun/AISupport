@@ -18,21 +18,51 @@ Services: PostgreSQL/pgvector, Ollama, MinIO/local DVC storage, Mailpit
 ## Phase boundaries
 
 1. **Foundation (implemented):** UV/Python project, typed health API, logging, tests, and CI.
-2. **Router ML pipelines:** deterministic synthetic tickets, independent student/staff Metaflow flows, DVC, MLflow, validation gates, registration, and prediction API.
-3. **Student/staff RAG:** document validation, parsing, configurable chunking and embeddings, hybrid retrieval, evaluation, and immutable release manifests.
+2. **Router ML pipelines (implemented):** deterministic synthetic tickets, independent student/staff Metaflow flows, DVC, MLflow, validation gates, registration, and prediction API.
+3. **Student/staff RAG (implemented):** document validation, parsing, configurable chunking and embeddings, hybrid retrieval, evaluation, and immutable release manifests.
 4. **Chatbot and agents:** synthetic authentication, Ollama/LangGraph, Streamlit, authorized profile tools, confirmed Mailpit email, and handoff.
 5. **Deployment and monitoring:** lockfile-based images, Compose services, Prometheus/Grafana, integration/performance tests, and rollback demonstration.
 
 Only components listed as implemented are currently available.
 
-## Phase 1 runtime
+## Phase 3 RAG architecture
 
-The Phase 1 process is intentionally small: Uvicorn serves FastAPI, the application validates responses through Pydantic, and `/health` provides a deployment probe. It performs no database, model, document, LLM, email, or external network calls.
+Student and staff collections have independent DVC pointers, benchmarks, configurations, MLflow experiments, release directories, and database audience policies. Shared code implements the mechanics without merging their data.
+
+```text
+approved source + metadata sidecar -> permission/date/hash validation
+  -> PDF/DOCX/Markdown/TXT/HTML parser -> configurable chunker
+  -> revision-pinned Sentence Transformer -> pgvector + PostgreSQL FTS
+  -> reciprocal-rank fusion -> optional CrossEncoder reranking
+  -> Recall@K/MRR/nDCG/citation/grounding/leakage evaluation
+  -> promotion gate -> immutable release manifest + MLflow run
+```
+
+The database schema enforces `audience = access_level`, while every lexical and vector query also requires both values to equal the server-selected audience. The in-memory implementation applies the same policy for deterministic tests and local experiments. It is not the production serving store.
+
+## Phase 2 router architecture
+
+Student and staff configurations point to separate source/evaluation datasets, MLflow experiments, registered model names, output paths, and random seeds. Both workflows call shared implementation modules so preprocessing and inference cannot silently diverge.
+
+```text
+synthetic generator (fixed seed, 12 months)
+  -> DVC source pointer
+  -> Metaflow ingestion/schema validation
+  -> chronological split + duplicate-content leakage removal
+  -> TF-IDF + logistic regression sklearn Pipeline
+  -> accuracy/macro-F1/per-class/top-k/calibration evaluation
+  -> explicit promotion gate
+  -> MLflow artifact + candidate alias (when passing)
+  -> manual approval -> champion alias
+  -> FastAPI internal prediction endpoint
+```
+
+The final resolving department is the supervised target. The original assigned department remains a noisy historical field. Intent is produced by a documented rule taxonomy and is not inferred from department assignment.
 
 ## Security baseline
 
 - Configuration examples contain no credentials.
 - Logs contain operational events, not prompts, raw personal records, or secrets.
-- Future audience authorization must be enforced in FastAPI and database queries.
+- The router and RAG endpoints are internal; Phase 4 must enforce authenticated audience selection before chatbot use.
 - Future side effects require explicit user confirmation and an audit event.
-- Retrieved documents will be treated as untrusted evidence, never as executable instructions.
+- Retrieved documents are returned as untrusted evidence with citations, never as executable instructions.

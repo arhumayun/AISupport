@@ -5,10 +5,26 @@ description = "Reproducible AI support assistant for UOWD"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "dvc>=3.67.1",
     "fastapi>=0.165.0",
+    "lxml>=6.1.3",
+    "metaflow>=2.19.41",
+    "mlflow>=3.18.0",
+    "pandas>=3.1.1",
+    "pgvector>=0.5.1",
+    "psycopg[binary]>=3.3.9",
     "pydantic>=2.14.4",
+    "pypdf>=7.1.1",
+    "python-docx>=1.2.0",
+    "pyyaml>=6.0.4",
+    "scikit-learn>=1.9.1",
+    "sentence-transformers>=6.3.0",
     "uvicorn>=0.54.0",
 ]
+
+[project.scripts]
+ai-support = "ai_support.cli:main"
 
 [dependency-groups]
 dev = [
@@ -39,6 +55,11 @@ testpaths = ["tests"]
 [tool.coverage.run]
 branch = true
 source = ["ai_support"]
+omit = [
+    "src/ai_support/cli.py",
+    "src/ai_support/pipelines/*_flow.py",
+    "src/ai_support/rag/service.py",
+]
 
 [tool.ruff]
 line-length = 100

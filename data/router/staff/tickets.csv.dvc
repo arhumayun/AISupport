@@ -1,0 +1,5 @@
+outs:
+- md5: e97cb3a2a671754bf12ea3a2ccea16cf
+  size: 98229
+  hash: md5
+  path: tickets.csv

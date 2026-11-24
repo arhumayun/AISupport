@@ -1,0 +1,33 @@
+[router]
+audience = "student"
+random_seed = 4686064
+
+[data]
+dataset_path = "data/router/student/tickets.csv"
+evaluation_path = "data/router/student/evaluation.csv"
+test_fraction = 0.20
+
+[model]
+ngram_min = 1
+ngram_max = 2
+min_df = 1
+max_features = 12000
+c = 4.0
+max_iter = 500
+top_k = 3
+
+[promotion]
+min_accuracy = 0.90
+min_macro_f1 = 0.85
+min_department_recall = 0.75
+max_calibration_error = 0.20
+
+[mlflow]
+tracking_uri = "sqlite:///artifacts/mlflow/mlflow.db"
+artifact_root = "artifacts/mlflow/files"
+experiment_name = "student-router-experiments"
+registered_model_name = "student-department-router"
+
+[output]
+predictions_path = "artifacts/router/student/holdout_predictions.jsonl"
+manifest_path = "artifacts/router/student/latest_run.json"

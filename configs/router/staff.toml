@@ -1,0 +1,33 @@
+[router]
+audience = "staff"
+random_seed = 4686065
+
+[data]
+dataset_path = "data/router/staff/tickets.csv"
+evaluation_path = "data/router/staff/evaluation.csv"
+test_fraction = 0.20
+
+[model]
+ngram_min = 1
+ngram_max = 2
+min_df = 1
+max_features = 12000
+c = 4.0
+max_iter = 500
+top_k = 3
+
+[promotion]
+min_accuracy = 0.90
+min_macro_f1 = 0.85
+min_department_recall = 0.75
+max_calibration_error = 0.20
+
+[mlflow]
+tracking_uri = "sqlite:///artifacts/mlflow/mlflow.db"
+artifact_root = "artifacts/mlflow/files"
+experiment_name = "staff-router-experiments"
+registered_model_name = "staff-department-router"
+
+[output]
+predictions_path = "artifacts/router/staff/holdout_predictions.jsonl"
+manifest_path = "artifacts/router/staff/latest_run.json"

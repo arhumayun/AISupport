@@ -1,0 +1,6 @@
+outs:
+- md5: bf9a39b7075af957f272c12cc365b327.dir
+  size: 3912
+  nfiles: 11
+  hash: md5
+  path: staff
