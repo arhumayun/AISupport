@@ -103,6 +103,8 @@ def _ensure_experiment(config: RAGConfig) -> str:
     experiment = mlflow.get_experiment_by_name(config.experiment_name)
     if experiment:
         return experiment.experiment_id
+    if config.tracking_uri.startswith(("http://", "https://")):
+        return mlflow.create_experiment(config.experiment_name)
     return mlflow.create_experiment(
         config.experiment_name, artifact_location=config.artifact_root.as_uri()
     )
@@ -179,3 +181,24 @@ def finalize_and_track(
             encoding="utf-8",
         )
     return final
+
+
+def select_release(project_root: Path, audience: str, release_id: str) -> Path:
+    """Select an existing approved release without rebuilding its index."""
+
+    audience_dir = project_root / "artifacts" / "rag" / audience
+    release_path = audience_dir / "releases" / f"{release_id}.json"
+    if not release_path.is_file():
+        raise FileNotFoundError(f"RAG release does not exist: {release_path}")
+    manifest = json.loads(release_path.read_text(encoding="utf-8"))
+    if manifest.get("release_id") != release_id or manifest.get("audience") != audience:
+        raise ValueError("release manifest identity does not match the requested audience and ID")
+    if manifest.get("status") != "candidate":
+        raise ValueError(f"release {release_id} did not pass its promotion gate")
+    latest_path = audience_dir / "latest.json"
+    latest_path.write_text(
+        json.dumps({"audience": audience, "release_id": release_id}, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    return latest_path

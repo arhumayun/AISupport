@@ -1,10 +1,11 @@
 """FastAPI application entry point."""
 
 import os
+import time
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from mlflow.exceptions import MlflowException
 from psycopg import Error as PsycopgError
@@ -29,6 +30,7 @@ from ai_support.api.models import (
 )
 from ai_support.api.runtime import create_phase4_services
 from ai_support.logging import configure_logging
+from ai_support.monitoring.metrics import HTTP_DURATION, HTTP_REQUESTS, metrics_payload
 from ai_support.rag.service import RAGService
 from ai_support.router.service import RouterService
 from ai_support.security.auth import AuthenticationError, Principal
@@ -55,6 +57,19 @@ def create_app() -> FastAPI:
     application.state.chat_service = chat_service
     bearer = HTTPBearer(auto_error=False)
 
+    @application.middleware("http")
+    async def observe_http(request: Request, call_next):
+        started = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            route = getattr(request.scope.get("route"), "path", "unmatched")
+            HTTP_REQUESTS.labels(request.method, route, str(status)).inc()
+            HTTP_DURATION.labels(request.method, route).observe(time.perf_counter() - started)
+
     def current_principal(
         request: Request,
         credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
@@ -73,6 +88,11 @@ def create_app() -> FastAPI:
         """Report that the API process is ready to accept requests."""
 
         return HealthResponse(service=SERVICE_NAME, version=__version__)
+
+    @application.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        payload, content_type = metrics_payload()
+        return Response(content=payload, headers={"Content-Type": content_type})
 
     @application.post("/v1/auth/login", response_model=LoginResponse, tags=["authentication"])
     async def login(payload: LoginRequest, request: Request) -> LoginResponse:

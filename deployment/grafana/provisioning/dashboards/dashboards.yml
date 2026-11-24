@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: UOWD AI Support
+    orgId: 1
+    folder: UOWD AI Support
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

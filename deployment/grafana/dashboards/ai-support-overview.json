@@ -1,0 +1,25 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"id": 1, "title": "API latency p50", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "ai_support:http_latency_p50_seconds:5m", "refId": "A"}]},
+    {"id": 2, "title": "API latency p95", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}, "targets": [{"expr": "ai_support:http_latency_p95_seconds:5m", "refId": "A"}]},
+    {"id": 3, "title": "API error rate", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}, "targets": [{"expr": "ai_support:http_error_rate:5m", "refId": "A"}]},
+    {"id": 4, "title": "Knowledge gaps (5m)", "type": "stat", "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}, "targets": [{"expr": "sum(increase(ai_support_knowledge_gaps_total[5m]))", "refId": "A"}]},
+    {"id": 5, "title": "Router predictions", "type": "timeseries", "gridPos": {"h": 7, "w": 12, "x": 0, "y": 4}, "targets": [{"expr": "sum by (audience, department) (rate(ai_support_router_predictions_total[5m]))", "legendFormat": "{{audience}} / {{department}}", "refId": "A"}]},
+    {"id": 6, "title": "Routing confidence distribution", "type": "heatmap", "gridPos": {"h": 7, "w": 12, "x": 12, "y": 4}, "targets": [{"expr": "sum by (le, audience) (rate(ai_support_router_confidence_bucket[5m]))", "format": "heatmap", "refId": "A"}]},
+    {"id": 7, "title": "RAG p95 latency", "type": "timeseries", "gridPos": {"h": 7, "w": 8, "x": 0, "y": 11}, "targets": [{"expr": "ai_support:rag_latency_p95_seconds:5m", "legendFormat": "{{audience}}", "refId": "A"}]},
+    {"id": 8, "title": "LLM p95 latency", "type": "timeseries", "gridPos": {"h": 7, "w": 8, "x": 8, "y": 11}, "targets": [{"expr": "ai_support:llm_latency_p95_seconds:5m", "legendFormat": "{{model}}", "refId": "A"}]},
+    {"id": 9, "title": "Citation coverage", "type": "timeseries", "gridPos": {"h": 7, "w": 8, "x": 16, "y": 11}, "targets": [{"expr": "sum by (audience) (rate(ai_support_citation_coverage_ratio_sum[5m])) / clamp_min(sum by (audience) (rate(ai_support_citation_coverage_ratio_count[5m])), 0.000001)", "legendFormat": "{{audience}}", "refId": "A"}]},
+    {"id": 10, "title": "Tool and email failures", "type": "timeseries", "gridPos": {"h": 7, "w": 12, "x": 0, "y": 18}, "targets": [{"expr": "sum by (tool, reason) (increase(ai_support_agent_tool_failures_total[5m]))", "refId": "A"}, {"expr": "sum by (department) (increase(ai_support_email_delivery_failures_total[5m]))", "refId": "B"}]},
+    {"id": 11, "title": "Active model versions", "type": "table", "gridPos": {"h": 7, "w": 6, "x": 12, "y": 18}, "targets": [{"expr": "ai_support_model_version_info", "format": "table", "instant": true, "refId": "A"}]},
+    {"id": 12, "title": "Active knowledge releases", "type": "table", "gridPos": {"h": 7, "w": 6, "x": 18, "y": 18}, "targets": [{"expr": "ai_support_knowledge_version_info", "format": "table", "instant": true, "refId": "A"}]}
+  ],
+  "schemaVersion": 42,
+  "tags": ["uowd", "ai-support"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "UOWD AI Support Overview",
+  "uid": "uowd-ai-support",
+  "version": 1
+}

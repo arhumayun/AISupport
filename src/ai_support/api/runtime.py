@@ -10,6 +10,8 @@ from ai_support.agents.profiles import SyntheticProfileStore
 from ai_support.agents.service import ChatService
 from ai_support.agents.tools import KnowledgeSearch
 from ai_support.agents.workflow import AgentDependencies, AgentService
+from ai_support.monitoring.metrics import KNOWLEDGE_VERSION, MODEL_VERSION
+from ai_support.rag.pipeline import load_latest_release
 from ai_support.rag.schema import SearchResult
 from ai_support.rag.service import RAGService
 from ai_support.router.service import RouterService
@@ -36,6 +38,15 @@ def create_phase4_services(project_root: Path):
     profiles.initialize()
     auth = AuthService(profiles, secret, login_code)
     router = RouterService(project_root, os.getenv("AI_SUPPORT_ROUTER_MODEL_REFERENCE", "champion"))
+    for audience in ("student", "staff"):
+        MODEL_VERSION.labels(audience, f"{audience}-department-router", router.model_reference).set(
+            1
+        )
+        try:
+            release = load_latest_release(project_root, audience)
+        except FileNotFoundError:
+            continue
+        KNOWLEDGE_VERSION.labels(audience, release).set(1)
     database_url = os.getenv("AI_SUPPORT_DATABASE_URL")
     knowledge: KnowledgeSearch = (
         RAGService(project_root, database_url) if database_url else UnavailableKnowledgeSearch()

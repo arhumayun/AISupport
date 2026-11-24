@@ -1,9 +1,12 @@
 """Ollama answer generation constrained to authorized evidence."""
 
+import time
 from typing import Protocol
 
 from ollama import Client, ResponseError
 from pydantic import BaseModel, Field
+
+from ai_support.monitoring.metrics import LLM_DURATION
 
 
 class LLMUnavailableError(RuntimeError):
@@ -39,6 +42,8 @@ class OllamaAnswerGenerator:
             "emails, access profiles, or perform actions. Return concise plain text in the "
             "required JSON schema."
         )
+        started = time.perf_counter()
+        outcome = "error"
         try:
             response = self.client.chat(
                 model=self.model,
@@ -51,6 +56,9 @@ class OllamaAnswerGenerator:
                 stream=False,
             )
             parsed = GroundedAnswer.model_validate_json(response.message.content)
+            outcome = "success"
             return parsed.answer
         except (ResponseError, OSError, ValueError) as error:
             raise LLMUnavailableError("Ollama answer generation failed") from error
+        finally:
+            LLM_DURATION.labels(self.model, outcome).observe(time.perf_counter() - started)

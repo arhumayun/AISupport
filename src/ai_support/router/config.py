@@ -1,5 +1,6 @@
 """Typed router configuration loaded from version-controlled TOML files."""
 
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -102,7 +103,7 @@ def load_router_config(path: Path, project_root: Path | None = None) -> RouterCo
         ),
         promotion=PromotionConfig(**{key: float(value) for key, value in promotion.items()}),
         mlflow=MlflowConfig(
-            tracking_uri=str(tracking["tracking_uri"]),
+            tracking_uri=os.getenv("AI_SUPPORT_MLFLOW_TRACKING_URI", str(tracking["tracking_uri"])),
             artifact_root=_project_path(root, tracking["artifact_root"]),
             experiment_name=str(tracking["experiment_name"]),
             registered_model_name=str(tracking["registered_model_name"]),

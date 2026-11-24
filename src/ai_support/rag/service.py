@@ -1,7 +1,9 @@
 """Runtime search service loading immutable audience-specific releases."""
 
+import time
 from pathlib import Path
 
+from ai_support.monitoring.metrics import RAG_DURATION
 from ai_support.rag.config import load_rag_config
 from ai_support.rag.pipeline import config_path_for_audience, load_latest_release, make_embedder
 from ai_support.rag.repository import PostgresRAGRepository
@@ -22,13 +24,19 @@ class RAGService:
         query: str,
         department: str | None = None,
     ) -> list[SearchResult]:
-        if audience not in self._retrievers:
-            config = load_rag_config(
-                config_path_for_audience(self.project_root, audience), self.project_root
+        started = time.perf_counter()
+        try:
+            if audience not in self._retrievers:
+                config = load_rag_config(
+                    config_path_for_audience(self.project_root, audience), self.project_root
+                )
+                repository = PostgresRAGRepository(self.database_url)
+                release_id = load_latest_release(self.project_root, audience)
+                self._retrievers[audience] = HybridRetriever(
+                    repository, make_embedder(config), config, release_id
+                )
+            return self._retrievers[audience].search(audience, query, department)
+        finally:
+            RAG_DURATION.labels(audience, department or "all").observe(
+                time.perf_counter() - started
             )
-            repository = PostgresRAGRepository(self.database_url)
-            release_id = load_latest_release(self.project_root, audience)
-            self._retrievers[audience] = HybridRetriever(
-                repository, make_embedder(config), config, release_id
-            )
-        return self._retrievers[audience].search(audience, query, department)

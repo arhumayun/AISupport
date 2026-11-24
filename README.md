@@ -1,6 +1,6 @@
 # UOWD AI Support Assistant
 
-The UOWD AI Support Assistant is a reproducible student-and-staff support system combining supervised department routing, permission-filtered RAG, and controlled agent tools. The repository currently implements **Phases 1–4**: a UV-managed FastAPI foundation, independent department routers and RAG releases, and an authenticated LangGraph/Ollama chatbot with a Streamlit interface.
+The UOWD AI Support Assistant is a reproducible student-and-staff support system combining supervised department routing, permission-filtered RAG, controlled agent tools, and observable container deployment. The repository implements **Phases 1–5**: a UV-managed FastAPI foundation, independent department routers and RAG releases, an authenticated LangGraph/Ollama chatbot, and a Docker Compose/Prometheus/Grafana deployment.
 
 ## Demo video
 
@@ -10,6 +10,7 @@ Not available yet. The final submission will include a public, no-sign-in demo l
 
 - [UV](https://docs.astral.sh/uv/) 0.11.23 or compatible
 - Git
+- Docker Desktop or Docker Engine with Compose v2
 - macOS or Linux (Windows users should use WSL for the documented shell commands)
 
 UV installs the pinned Python 3.12 runtime when needed. PyCharm can use `.venv/bin/python` after synchronization.
@@ -88,7 +89,7 @@ See `docs/rag-pipeline.md` for metadata, experiments, metrics, SQL setup, and re
 
 Copy `.env.example` to `.env`, replace the synthetic login code and session-secret placeholders, and export the variables into the shell running the API. The backend—not the Streamlit audience selector—verifies the identity and derives the available router, knowledge base, profile, and tools.
 
-Start the required local services and an already-installed Ollama model. Phase 5 will provide the Compose stack; Phase 4 does not automatically download a model or start infrastructure.
+Start the required local services and an already-installed Ollama model. The application never downloads model weights automatically.
 
 ```bash
 uv run uvicorn ai_support.api.app:app --reload
@@ -117,7 +118,32 @@ AI_SUPPORT_TEST_OLLAMA_MODEL=llama3.1:latest \
 
 ## Build and run the container
 
-Container images and Docker Compose are planned for Phase 5. They are deliberately absent at the end of Phase 4.
+Copy `.env.example` to `.env`, replace all placeholder credentials, then run:
+
+```bash
+docker compose config --quiet
+docker compose build api minio
+docker compose up -d
+docker compose ps
+```
+
+The lockfile-based API image runs as non-root UID/GID 10001. The chatbot is at
+`http://127.0.0.1:8501`; FastAPI is at `http://127.0.0.1:8000`. Administrative services bind
+only to loopback and PostgreSQL is not published. Install the configured Ollama model
+explicitly with `docker compose exec ollama ollama pull llama3.1:latest`.
+
+Runtime metrics are exposed at `/metrics`, scraped by Prometheus, and displayed in the
+provisioned Grafana dashboard. Build the historical experiment catalog or measure a running
+health endpoint with:
+
+```bash
+uv run ai-support catalog build
+uv run ai-support benchmark-api --requests 100 \
+  --output docs/performance-baseline.json
+```
+
+See `docs/deployment-monitoring.md` for service layout, rollback, monitoring, and
+troubleshooting.
 
 ## Call the service
 
@@ -183,12 +209,14 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 ├── data/app/                     # Seeded synthetic profiles
 ├── data/rag/                     # DVC-versioned documents and benchmarks
 ├── data/router/                  # DVC pointers; CSV contents remain out of Git
+├── deployment/                   # PostgreSQL, MinIO, Prometheus, and Grafana configuration
 ├── docs/
 │   ├── architecture/overview.md  # Target architecture and phase boundaries
 │   ├── chatbot-agents.md         # Authentication, tools, UI, Ollama, Mailpit
 │   ├── rag-pipeline.md           # RAG experiments, releases, and restoration
 │   ├── router-pipeline.md        # Execution, tracking, reproduction, rollback
 │   ├── implementation-log.md     # Changes from the Assessment 2 design
+│   ├── deployment-monitoring.md  # Compose, telemetry, performance, and rollback
 │   └── reference/                # Supplied assessment PDFs
 ├── src/ai_support/
 │   ├── api/                      # FastAPI contracts and endpoints
@@ -199,9 +227,12 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 │   ├── security/                 # Signed synthetic sessions
 │   └── ui/                       # Streamlit app and API client
 ├── tests/agents/                 # Authorization, graph, adapter, and API tests
+├── tests/deployment/             # Metrics, catalog, rollback, and performance helpers
 ├── tests/rag/                    # RAG policy, adapter, pipeline, and API tests
 ├── tests/router/                 # Router unit, API, and registry tests
 ├── pyproject.toml                # Dependencies and tool configuration
+├── compose.yaml                  # Private-network assessment service stack
+├── Dockerfile                    # UV-locked non-root application image
 └── uv.lock                       # Reproducible dependency lock
 ```
 
@@ -220,9 +251,12 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 - **Mailpit SMTP** receives only confirmed messages addressed to synthetic `example.test` recipients.
 - **FastAPI and Pydantic** expose typed authentication, routing, retrieval, chat, action, and feedback contracts.
 - **pytest, HTTPX2, and Ruff** provide automated behavioral, integration, lint, formatting, and coverage checks.
-- **GitHub Actions** repeats the locked installation and quality checks on pushes and pull requests.
+- **Prometheus and Grafana** collect genuine runtime telemetry and provision a versioned dashboard.
+- **Docker Compose** runs the assessment services with named storage and private backend networking.
+- **GitHub Actions** repeats the locked installation, quality checks, Compose validation, and Dockerfile validation on pushes and pull requests.
 
-Prometheus/Grafana and Docker Compose remain Phase 5 work. Mailpit and PostgreSQL adapters are implemented, but their managed services arrive with that Compose stack.
+The assessment deployment is single-host and intentionally does not claim production TLS,
+institutional SSO, managed secrets, multi-node availability, or automatic rollback.
 
 ## Team and contributions
 

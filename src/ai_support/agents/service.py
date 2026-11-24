@@ -8,6 +8,7 @@ from ai_support.agents.actions import (
 from ai_support.agents.email import EmailSender
 from ai_support.agents.schema import AgentReply, EmailReceipt
 from ai_support.agents.workflow import AgentService
+from ai_support.monitoring.metrics import EMAIL_FAILURES
 from ai_support.security.auth import Principal
 
 
@@ -40,6 +41,7 @@ class ChatService:
         try:
             receipt = self.sender.send(draft)
         except (OSError, TimeoutError) as error:
+            EMAIL_FAILURES.labels(draft.department).inc()
             self.audit.record(
                 {
                     "event": "department_email",

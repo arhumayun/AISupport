@@ -1,0 +1,11 @@
+{
+  "error_rate": 0.0,
+  "errors": 0,
+  "latency_ms": {
+    "max": 16.349,
+    "p50": 0.678,
+    "p95": 1.315
+  },
+  "requests": 100,
+  "url": "http://127.0.0.1:18000/health"
+}

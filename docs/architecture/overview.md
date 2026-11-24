@@ -21,9 +21,25 @@ Services: PostgreSQL/pgvector, Ollama, MinIO/local DVC storage, Mailpit
 2. **Router ML pipelines (implemented):** deterministic synthetic tickets, independent student/staff Metaflow flows, DVC, MLflow, validation gates, registration, and prediction API.
 3. **Student/staff RAG (implemented):** document validation, parsing, configurable chunking and embeddings, hybrid retrieval, evaluation, and immutable release manifests.
 4. **Chatbot and agents (implemented):** synthetic authentication, Ollama/LangGraph, Streamlit, authorized profile tools, confirmed Mailpit email, and handoff.
-5. **Deployment and monitoring:** lockfile-based images, Compose services, Prometheus/Grafana, integration/performance tests, and rollback demonstration.
+5. **Deployment and monitoring (implemented):** lockfile-based non-root image, private Compose services, Prometheus/Grafana, measured smoke tests, an experiment catalog, and controlled rollback commands.
 
 Only components listed as implemented are currently available.
+
+## Phase 5 deployment architecture
+
+Compose separates the public application edge, a loopback-only admin bridge, and an internal
+backend network. FastAPI,
+Streamlit, PostgreSQL/pgvector, Ollama, MLflow, MinIO, Mailpit, Prometheus, and Grafana use
+pinned release tags or source commits. PostgreSQL, MinIO, and the application use named
+volumes; MinIO stores MLflow artifacts while PostgreSQL stores its metadata. Prometheus
+scrapes only the API on the private network and Grafana provisions the checked-in dashboard.
+
+The runtime exports bounded-label request, routing, retrieval, LLM, citation, gap, tool,
+email, model-version, and knowledge-version series. The JSON Lines experiment catalog joins
+the immutable router/RAG manifests for future historical reporting without inventing live
+metrics. Rollback remains an approved manual operation: an MLflow model alias can target an
+older registered version, and a RAG release pointer can select an existing gate-passing
+manifest without rebuilding it.
 
 ## Phase 3 RAG architecture
 

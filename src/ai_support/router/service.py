@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 
+from ai_support.monitoring.metrics import ROUTER_CONFIDENCE, ROUTER_PREDICTIONS
 from ai_support.router.config import load_router_config
 from ai_support.router.model import prediction_frame
 from ai_support.router.schema import Audience
@@ -53,7 +54,7 @@ class RouterService:
         scores = tuple(
             DepartmentScore(str(classes[index]), float(probabilities[index])) for index in indices
         )
-        return RouterPrediction(
+        prediction = RouterPrediction(
             audience=audience,
             department=scores[0].department,
             confidence=scores[0].probability,
@@ -61,3 +62,6 @@ class RouterService:
             model_name=config.mlflow.registered_model_name,
             model_reference=self.model_reference,
         )
+        ROUTER_PREDICTIONS.labels(audience, prediction.department, self.model_reference).inc()
+        ROUTER_CONFIDENCE.labels(audience).observe(prediction.confidence)
+        return prediction

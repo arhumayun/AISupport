@@ -86,3 +86,41 @@ The full automated suite passes with mocked LLM responses and no model download.
 - Conversation history is session-local in Streamlit and is not persisted across browser sessions.
 - The intent taxonomy is deliberately narrow and deterministic. More advanced intent handling requires separate evaluation before expansion.
 - Prometheus/Grafana telemetry, containers, performance tests, and deployment hardening remain Phase 5 work.
+
+## 2026-11-24 - Phase 5 deployment and monitoring
+
+- Added a Python 3.12 lockfile-based application image running as UID/GID 10001 with a
+  read-only-friendly temporary filesystem and persistent artifact/model-cache volumes.
+- Added Compose services for FastAPI, Streamlit, PostgreSQL/pgvector, Ollama, MLflow, MinIO,
+  Prometheus, Grafana, and Mailpit. Administrative ports bind only to loopback and backend
+  services share an internal Docker network.
+- Added genuine FastAPI runtime metrics and a provisioned Grafana dashboard with recording
+  rules for latency, errors, router confidence, retrieval/LLM latency, citations, knowledge
+  gaps, tool/email failures, and active model/knowledge versions.
+- Added an experiment metadata catalog, explicit RAG release selection, and retained MLflow
+  alias/version loading for approved rollback without automatic production mutation.
+- Added deployment configuration, monitoring, catalog, release-selection, and performance
+  helper tests plus CI validation of Compose and the Dockerfile.
+- MinIO's upstream public images were withdrawn in 2026. The stack therefore compiles the
+  final published release from immutable official source commit
+  `07c3a429bfed433e49018cb0f78a52145d4bedeb` rather than relying on an untrusted mirror.
+
+### Measured development result
+
+The final application image built successfully and ran as UID/GID 10001. A real 100-request
+sequential probe of its containerized `/health` endpoint returned 0 errors with 0.678 ms p50,
+1.315 ms p95, and 16.349 ms maximum latency on the arm64 development host. The `/metrics`
+endpoint reported all 101 successful health calls. These figures are a local smoke baseline,
+not an end-to-end chatbot or production capacity benchmark.
+
+### Known Phase 5 limitations
+
+- The unified application image includes training, RAG, and runtime dependencies and is
+  approximately 5.34 GB on the verified arm64 development host. Separating training and
+  serving images is a production optimization.
+- Compose is a single-host assessment deployment. TLS termination, SSO, secret management,
+  backups, vulnerability scanning, and multi-node availability remain production work.
+- Grafana compares runtime versions now; historical experiment panels can consume the new
+  catalog after a future catalog exporter/database integration.
+- Ollama model weights are never pulled automatically. The operator must install the
+  configured model before the full chatbot can answer.

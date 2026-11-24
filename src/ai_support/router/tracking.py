@@ -70,10 +70,13 @@ def _ensure_tracking_store(config: RouterConfig) -> str:
     mlflow.set_registry_uri(config.mlflow.tracking_uri)
     experiment = mlflow.get_experiment_by_name(config.mlflow.experiment_name)
     if experiment is None:
-        experiment_id = mlflow.create_experiment(
-            config.mlflow.experiment_name,
-            artifact_location=config.mlflow.artifact_root.as_uri(),
-        )
+        if config.mlflow.tracking_uri.startswith(("http://", "https://")):
+            experiment_id = mlflow.create_experiment(config.mlflow.experiment_name)
+        else:
+            experiment_id = mlflow.create_experiment(
+                config.mlflow.experiment_name,
+                artifact_location=config.mlflow.artifact_root.as_uri(),
+            )
     else:
         experiment_id = experiment.experiment_id
     return experiment_id

@@ -1,5 +1,6 @@
 """Typed RAG experiment and query-time configuration."""
 
+import os
 import tomllib
 from dataclasses import dataclass
 from datetime import date
@@ -106,7 +107,7 @@ def load_rag_config(path: Path, project_root: Path | None = None) -> RAGConfig:
         min_recall_at_k=float(promotion["min_recall_at_k"]),
         min_mrr=float(promotion["min_mrr"]),
         max_unauthorized_rate=float(promotion["max_unauthorized_rate"]),
-        tracking_uri=tracking["tracking_uri"],
+        tracking_uri=os.getenv("AI_SUPPORT_MLFLOW_TRACKING_URI", tracking["tracking_uri"]),
         artifact_root=(root / tracking["artifact_root"]).resolve(),
         source_path=source,
     )

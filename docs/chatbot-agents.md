@@ -13,7 +13,8 @@ Required components for the complete retrieval demo are:
 - Ollama with the configured model already installed;
 - Mailpit SMTP on the configured host/port for confirmed email tests.
 
-No model is pulled automatically. Phase 5 will supply these services through Docker Compose.
+No model is pulled automatically. Phase 5 supplies these services through Docker Compose;
+see `deployment-monitoring.md` for startup and security boundaries.
 
 ## Start the applications
 

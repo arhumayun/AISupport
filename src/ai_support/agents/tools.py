@@ -14,6 +14,7 @@ from ai_support.agents.schema import (
     StaffProfile,
     StudentProfile,
 )
+from ai_support.monitoring.metrics import KNOWLEDGE_GAPS
 from ai_support.rag.schema import SearchResult
 from ai_support.security.auth import Principal
 
@@ -120,6 +121,7 @@ def record_knowledge_gap(
     reason: str,
     store: JsonlAuditStore,
 ) -> None:
+    KNOWLEDGE_GAPS.labels(principal.audience, department or "unknown", reason).inc()
     store.record(
         {
             "event": "knowledge_gap",

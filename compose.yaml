@@ -1,0 +1,248 @@
+name: uowd-ai-support
+
+x-app-image: &app-image
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: uowd-ai-support:${AI_SUPPORT_IMAGE_TAG:-local}
+
+x-app-security: &app-security
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17-bookworm
+    environment:
+      POSTGRES_DB: ai_support
+      POSTGRES_USER: ai_support
+      POSTGRES_PASSWORD: ${AI_SUPPORT_POSTGRES_PASSWORD:-change-me-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deployment/postgres/00-databases.sql:/docker-entrypoint-initdb.d/00-databases.sql:ro
+      - ./src/ai_support/rag/sql/001_rag_schema.sql:/docker-entrypoint-initdb.d/10-rag-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_support -d ai_support"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend]
+    <<: *app-security
+
+  minio:
+    # MinIO withdrew its public pre-built images in 2026. Build the last
+    # published release from its immutable upstream source commit instead.
+    build:
+      context: .
+      dockerfile: deployment/minio/Dockerfile
+      args:
+        MINIO_COMMIT: 07c3a429bfed433e49018cb0f78a52145d4bedeb
+    image: uowd-minio:RELEASE.2025-09-07T16-13-09Z
+    environment:
+      MINIO_ROOT_USER: ${AI_SUPPORT_MINIO_USER:-ai-support-minio}
+      MINIO_ROOT_PASSWORD: ${AI_SUPPORT_MINIO_PASSWORD:-change-me-minio-password}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend, admin]
+    <<: *app-security
+
+  minio-init:
+    <<: *app-image
+    command: ["python", "-m", "ai_support.deployment.minio_init"]
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${AI_SUPPORT_MINIO_USER:-ai-support-minio}
+      AWS_SECRET_ACCESS_KEY: ${AI_SUPPORT_MINIO_PASSWORD:-change-me-minio-password}
+      AI_SUPPORT_MLFLOW_BUCKET: mlflow
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+    security_opt:
+      - no-new-privileges:true
+
+  mlflow:
+    <<: [*app-image, *app-security]
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - postgresql+psycopg://ai_support:${AI_SUPPORT_POSTGRES_PASSWORD:-change-me-postgres}@postgres:5432/mlflow
+      - --serve-artifacts
+      - --artifacts-destination
+      - s3://mlflow
+      - --allowed-hosts
+      - mlflow,mlflow:5000,localhost,localhost:5000,localhost:5050,127.0.0.1,127.0.0.1:5000,127.0.0.1:5050
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${AI_SUPPORT_MINIO_USER:-ai-support-minio}
+      AWS_SECRET_ACCESS_KEY: ${AI_SUPPORT_MINIO_PASSWORD:-change-me-minio-password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      # macOS AirPlay commonly occupies host port 5000.
+      - "127.0.0.1:${AI_SUPPORT_MLFLOW_PORT:-5050}:5000"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [backend, admin]
+
+  ollama:
+    image: ollama/ollama:0.40.18
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [backend, admin]
+    <<: *app-security
+
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_ALLOWED_RECIPIENTS: "@example\\.test$"
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    networks: [backend, admin]
+    <<: *app-security
+
+  api:
+    <<: [*app-image, *app-security]
+    environment:
+      AI_SUPPORT_ENV: container
+      AI_SUPPORT_SESSION_SECRET: ${AI_SUPPORT_SESSION_SECRET:-replace-with-at-least-24-random-characters}
+      AI_SUPPORT_DEMO_LOGIN_CODE: ${AI_SUPPORT_DEMO_LOGIN_CODE:-replace-demo-code}
+      AI_SUPPORT_DATABASE_URL: postgresql://ai_support:${AI_SUPPORT_POSTGRES_PASSWORD:-change-me-postgres}@postgres:5432/ai_support
+      AI_SUPPORT_MLFLOW_TRACKING_URI: http://mlflow:5000
+      AI_SUPPORT_ROUTER_MODEL_REFERENCE: ${AI_SUPPORT_ROUTER_MODEL_REFERENCE:-champion}
+      AI_SUPPORT_OLLAMA_HOST: http://ollama:11434
+      AI_SUPPORT_OLLAMA_MODEL: ${AI_SUPPORT_OLLAMA_MODEL:-llama3.1:latest}
+      AI_SUPPORT_MAILPIT_HOST: mailpit
+      AI_SUPPORT_MAILPIT_PORT: 1025
+      HF_HOME: /app/.cache/huggingface
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    volumes:
+      - app-artifacts:/app/artifacts
+      - huggingface-cache:/app/.cache/huggingface
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [edge, backend]
+
+  streamlit:
+    <<: [*app-image, *app-security]
+    command:
+      - streamlit
+      - run
+      - src/ai_support/ui/app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+      - --server.headless=true
+    environment:
+      AI_SUPPORT_API_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8501:8501"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [edge]
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deployment/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [backend, admin]
+    <<: *app-security
+
+  grafana:
+    image: grafana/grafana:13.2.6-slim
+    environment:
+      GF_SECURITY_ADMIN_USER: ${AI_SUPPORT_GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${AI_SUPPORT_GRAFANA_PASSWORD:-change-me-grafana-password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./deployment/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deployment/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [backend, admin]
+    <<: *app-security
+
+networks:
+  edge:
+  admin:
+  backend:
+    internal: true
+
+volumes:
+  app-artifacts:
+  grafana-data:
+  huggingface-cache:
+  minio-data:
+  ollama-data:
+  postgres-data:
+  prometheus-data:

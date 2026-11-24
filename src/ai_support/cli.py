@@ -6,9 +6,12 @@ from typing import cast
 
 from metaflow import Runner
 
+from ai_support.deployment.catalog import build_experiment_catalog
+from ai_support.deployment.performance import measure, write_measurement
 from ai_support.rag.config import load_rag_config
 from ai_support.rag.pipeline import config_path_for_audience as rag_config_path
 from ai_support.rag.sample_data import generate_sample_corpus
+from ai_support.rag.tracking import select_release
 from ai_support.router.config import load_router_config
 from ai_support.router.pipeline import config_path_for_audience
 from ai_support.router.schema import Audience
@@ -108,11 +111,23 @@ def build_parser() -> argparse.ArgumentParser:
     rag_generate.add_argument("--audience", choices=("student", "staff", "all"), default="all")
     rag_build = rag_commands.add_parser("build")
     rag_build.add_argument("--audience", choices=("student", "staff"), required=True)
+    rag_select = rag_commands.add_parser("select-release")
+    rag_select.add_argument("--audience", choices=("student", "staff"), required=True)
+    rag_select.add_argument("--release-id", required=True)
 
     all_rags = commands.add_parser("rags", help="Run both independent RAG pipelines")
     rags_commands = all_rags.add_subparsers(dest="rags_command", required=True)
     rag_run_all = rags_commands.add_parser("run-all")
     rag_run_all.add_argument("--generate", action="store_true")
+
+    catalog = commands.add_parser("catalog", help="Experiment metadata catalog operations")
+    catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
+    catalog_commands.add_parser("build")
+
+    benchmark = commands.add_parser("benchmark-api", help="Measure an HTTP health endpoint")
+    benchmark.add_argument("--url", default="http://127.0.0.1:8000/health")
+    benchmark.add_argument("--requests", type=int, default=100)
+    benchmark.add_argument("--output", type=Path)
     return parser
 
 
@@ -143,8 +158,18 @@ def main() -> None:
         generate_rag_data(project_root, args.audience)
     elif args.command == "rag" and args.rag_command == "build":
         build_rag(project_root, cast(Audience, args.audience))
+    elif args.command == "rag" and args.rag_command == "select-release":
+        path = select_release(project_root, args.audience, args.release_id)
+        print(f"selected {args.audience} RAG release {args.release_id} in {path}")
     elif args.command == "rags":
         if args.generate:
             generate_rag_data(project_root, "all")
         for audience in ("student", "staff"):
             build_rag(project_root, audience)
+    elif args.command == "catalog":
+        print(build_experiment_catalog(project_root))
+    elif args.command == "benchmark-api":
+        result = measure(args.url, args.requests)
+        if args.output:
+            write_measurement(result, args.output)
+        print(result)

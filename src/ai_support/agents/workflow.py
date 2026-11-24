@@ -22,6 +22,7 @@ from ai_support.agents.tools import (
     request_department_input,
     search_knowledge,
 )
+from ai_support.monitoring.metrics import CITATION_COVERAGE, TOOL_FAILURES
 from ai_support.router.service import RouterPrediction
 from ai_support.security.auth import Principal
 
@@ -97,6 +98,7 @@ def build_agent_graph(dependencies: AgentDependencies):
             )
             return {"department": result.department, "confidence": result.confidence}
         except (MlflowException, OSError, ValueError, RuntimeError):
+            TOOL_FAILURES.labels("department_router", "unavailable").inc()
             return {"department": None, "confidence": 0.0}
 
     def tool(state: AgentState) -> dict:
@@ -139,12 +141,14 @@ def build_agent_graph(dependencies: AgentDependencies):
             try:
                 available = search_knowledge(principal, message, department, dependencies.knowledge)
             except (FileNotFoundError, OSError, PsycopgError):
+                TOOL_FAILURES.labels("search_knowledge", "unavailable").inc()
                 available = []
             try:
                 draft = request_department_input(
                     principal, str(department), message, dependencies.actions
                 )
             except ValueError:
+                TOOL_FAILURES.labels("request_department_input", "unsupported_department").inc()
                 answer, url = get_support_handoff(principal, department)
                 return {"answer": answer, "handoff_url": url}
             return {
@@ -162,6 +166,7 @@ def build_agent_graph(dependencies: AgentDependencies):
         try:
             results = search_knowledge(principal, message, department, dependencies.knowledge)
         except (FileNotFoundError, OSError, PsycopgError):
+            TOOL_FAILURES.labels("search_knowledge", "unavailable").inc()
             answer, url = get_support_handoff(principal, department)
             record_knowledge_gap(
                 principal, message, department, "retrieval_failure", dependencies.gap_store
@@ -191,6 +196,7 @@ def build_agent_graph(dependencies: AgentDependencies):
         try:
             return {"answer": dependencies.llm.answer(state["message"], state.get("evidence", []))}
         except LLMUnavailableError:
+            TOOL_FAILURES.labels("ollama_answer", "unavailable").inc()
             return {
                 "answer": (
                     "I found approved guidance and listed its citations, but local answer "
@@ -217,7 +223,7 @@ class AgentService:
 
     def respond(self, principal: Principal, message: str) -> AgentReply:
         state = self.graph.invoke({"principal": principal, "message": message})
-        return AgentReply(
+        reply = AgentReply(
             message_id=str(uuid.uuid4()),
             audience=principal.audience,
             answer=state["answer"],
@@ -227,3 +233,7 @@ class AgentService:
             handoff_url=state.get("handoff_url"),
             intent=state["intent"],
         )
+        evidence_count = len(state.get("evidence", []))
+        coverage = min(len(reply.citations) / evidence_count, 1.0) if evidence_count else 0.0
+        CITATION_COVERAGE.labels(principal.audience).observe(coverage)
+        return reply
