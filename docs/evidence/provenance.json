@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-11-24T14:04:31.707942+00:00",
-  "git_commit": "a012cc57c956796e34ed505c05a0480e8d7fa107",
+  "generated_at_utc": "2026-11-24T18:40:14.959637+00:00",
+  "git_commit": "406a83b84dafc130bcfa0f12e62c0fa634567449",
   "git_dirty": true,
   "source": "generated from local immutable manifests and the MLflow registry"
 }

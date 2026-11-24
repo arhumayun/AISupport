@@ -85,6 +85,10 @@ def export_evidence(project_root: Path, output_dir: Path) -> list[Path]:
 
     root = project_root.resolve()
     destination = output_dir.resolve()
+    # Capture source provenance before creating or refreshing tracked evidence files.
+    # Otherwise the exporter marks a clean revision dirty because of its own writes.
+    source_commit = _git_value(root, "rev-parse", "HEAD")
+    source_dirty = _git_value(root, "status", "--short") != "unavailable"
     destination.mkdir(parents=True, exist_ok=True)
     catalog = build_experiment_catalog(root, destination / "experiment-catalog.jsonl")
     registry = destination / "model-registry.json"
@@ -96,8 +100,8 @@ def export_evidence(project_root: Path, output_dir: Path) -> list[Path]:
         provenance,
         {
             "generated_at_utc": datetime.now(UTC).isoformat(),
-            "git_commit": _git_value(root, "rev-parse", "HEAD"),
-            "git_dirty": _git_value(root, "status", "--short") != "unavailable",
+            "git_commit": source_commit,
+            "git_dirty": source_dirty,
             "source": "generated from local immutable manifests and the MLflow registry",
         },
     )

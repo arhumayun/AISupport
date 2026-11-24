@@ -58,6 +58,26 @@ def test_export_evidence_writes_reviewable_bundle(tmp_path: Path, monkeypatch) -
     ]
 
 
+def test_export_evidence_captures_git_state_before_writing(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "evidence"
+
+    monkeypatch.setattr("ai_support.deployment.evidence._registry_evidence", lambda _root: [])
+
+    def git_value(_root: Path, *args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return "clean-source-commit"
+        assert args == ("status", "--short")
+        return "unavailable" if not output.exists() else "evidence was written"
+
+    monkeypatch.setattr("ai_support.deployment.evidence._git_value", git_value)
+
+    export_evidence(tmp_path, output)
+
+    provenance = json.loads((output / "provenance.json").read_text())
+    assert provenance["git_commit"] == "clean-source-commit"
+    assert provenance["git_dirty"] is False
+
+
 def test_registry_evidence_exports_aliases_and_versions(tmp_path: Path, monkeypatch) -> None:
     config = SimpleNamespace(
         mlflow=SimpleNamespace(
