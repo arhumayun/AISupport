@@ -45,5 +45,22 @@ benchmarks; they are pipeline evidence, not a production-performance claim.
 
 The rehearsal revealed and verified fixes for configurable host ports, an explicit Metaflow container
 identity, non-root Hugging Face cache ownership, psycopg v3 cursor batching, and PostgreSQL optional
-parameter typing. Regenerate the JSON evidence bundle and this record after the final reviewed commit
-so the submission evidence names the final clean revision.
+parameter typing.
+
+## Final reviewed verification
+
+- Date: 2026-11-24 (Asia/Dubai)
+- Clean evidence source commit: `fdebcbc5b574e6b6c7b3e5d081e4838c14ad373d`
+- Evidence source worktree state: `git_dirty=false`
+- Evidence commit: `125ec685c4bc0bcb32cc35c993baa393bca3ca26`
+- Application image: `sha256:cc9a8c2f8191dc2c10342f23e3a4bec6cfe1a837f71dd7b4949c3a24c826046d`
+- OCI source revision: `125ec685c4bc0bcb32cc35c993baa393bca3ca26`
+- Runtime user: `10001:10001`
+- Container health response:
+  `{"status":"ok","service":"uowd-ai-support-api","version":"0.1.0"}`
+- Automated suite: 76 passed, 1 skipped, 90.44% coverage
+- Ruff, UV lock/sync, DVC status, Compose validation, and all 11 Prometheus rules: passed
+
+The final image was rebuilt from the committed lockfile without relying on the earlier image. The
+smoke-test container was removed after the successful health check. The final documentation-only
+record update does not alter the application image build context.
