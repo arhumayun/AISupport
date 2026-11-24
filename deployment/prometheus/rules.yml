@@ -22,3 +22,54 @@ groups:
         expr: >-
           histogram_quantile(0.95,
           sum by (le, model) (rate(ai_support_llm_response_duration_seconds_bucket[5m])))
+  - name: ai-support-alerts
+    rules:
+      - alert: AiSupportApiUnavailable
+        expr: up{job="ai-support-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: AI Support API is unavailable
+          runbook: docs/operations-report.md#alert-response
+      - alert: AiSupportHighErrorRate
+        expr: ai_support:http_error_rate:5m > 0.01
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: API error rate exceeds one percent
+          runbook: docs/operations-report.md#alert-response
+      - alert: AiSupportSlowResponses
+        expr: ai_support:http_latency_p95_seconds:5m > 6
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency exceeds six seconds
+          runbook: docs/operations-report.md#alert-response
+      - alert: AiSupportLowCitationCoverage
+        expr: >-
+          sum(rate(ai_support_citation_coverage_ratio_sum[15m]))
+          / clamp_min(sum(rate(ai_support_citation_coverage_ratio_count[15m])), 0.000001)
+          < 0.95
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Average citation coverage is below 95 percent
+          runbook: docs/operations-report.md#alert-response
+      - alert: AiSupportAgentToolFailures
+        expr: increase(ai_support_agent_tool_failures_total[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A controlled agent tool failed
+          runbook: docs/operations-report.md#alert-response
+      - alert: AiSupportEmailDeliveryFailures
+        expr: increase(ai_support_email_delivery_failures_total[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A confirmed synthetic email failed delivery
+          runbook: docs/operations-report.md#alert-response

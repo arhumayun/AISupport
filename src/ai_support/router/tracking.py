@@ -1,6 +1,7 @@
 """MLflow tracking, registry aliases, and reproducibility metadata."""
 
 import json
+import os
 import subprocess
 import tempfile
 from dataclasses import asdict
@@ -33,6 +34,10 @@ def file_sha256(path: Path) -> str:
 
 def git_metadata(project_root: Path) -> tuple[str, bool]:
     """Return commit and dirty state without failing outside Git."""
+
+    image_commit = os.getenv("AI_SUPPORT_GIT_COMMIT")
+    if image_commit and image_commit != "unknown":
+        return image_commit, os.getenv("AI_SUPPORT_GIT_DIRTY", "false").lower() == "true"
 
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],

@@ -7,9 +7,11 @@ from typing import cast
 from metaflow import Runner
 
 from ai_support.deployment.catalog import build_experiment_catalog
+from ai_support.deployment.evidence import export_evidence
 from ai_support.deployment.performance import measure, write_measurement
 from ai_support.rag.config import load_rag_config
 from ai_support.rag.pipeline import config_path_for_audience as rag_config_path
+from ai_support.rag.pipeline import load_latest_release
 from ai_support.rag.sample_data import generate_sample_corpus
 from ai_support.rag.tracking import select_release
 from ai_support.router.config import load_router_config
@@ -75,6 +77,25 @@ def build_rag(project_root: Path, audience: Audience) -> None:
     )
 
 
+def bootstrap_demo(project_root: Path, rows: int) -> None:
+    """Build and approve every artifact required by the assessment runtime."""
+
+    generate_data(project_root, "all", rows)
+    for audience in ("student", "staff"):
+        train_router(project_root, audience)
+        config = load_router_config(config_path_for_audience(project_root, audience), project_root)
+        version = approve_model(config, "candidate")
+        print(f"{audience} model version {version} promoted to champion")
+    generate_rag_data(project_root, "all")
+    for audience in ("student", "staff"):
+        try:
+            release_id = load_latest_release(project_root, audience)
+        except FileNotFoundError:
+            build_rag(project_root, audience)
+        else:
+            print(f"{audience} RAG release {release_id} already selected; reusing immutable index")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ai-support")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -124,10 +145,20 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
     catalog_commands.add_parser("build")
 
+    evidence = commands.add_parser("evidence", help="Submission evidence operations")
+    evidence_commands = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_export = evidence_commands.add_parser("export")
+    evidence_export.add_argument("--output", type=Path, default=Path("docs/evidence"))
+
     benchmark = commands.add_parser("benchmark-api", help="Measure an HTTP health endpoint")
     benchmark.add_argument("--url", default="http://127.0.0.1:8000/health")
     benchmark.add_argument("--requests", type=int, default=100)
     benchmark.add_argument("--output", type=Path)
+
+    bootstrap = commands.add_parser(
+        "bootstrap-demo", help="Generate, train, approve, and index the complete demo"
+    )
+    bootstrap.add_argument("--rows", type=int, default=600)
     return parser
 
 
@@ -168,8 +199,13 @@ def main() -> None:
             build_rag(project_root, audience)
     elif args.command == "catalog":
         print(build_experiment_catalog(project_root))
+    elif args.command == "evidence":
+        for path in export_evidence(project_root, args.output):
+            print(path)
     elif args.command == "benchmark-api":
         result = measure(args.url, args.requests)
         if args.output:
             write_measurement(result, args.output)
         print(result)
+    elif args.command == "bootstrap-demo":
+        bootstrap_demo(project_root, args.rows)

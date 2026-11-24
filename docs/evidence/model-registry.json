@@ -1,0 +1,57 @@
+[
+  {
+    "aliases": {
+      "candidate": 4,
+      "champion": 2
+    },
+    "audience": "student",
+    "registered_model": "student-department-router",
+    "versions": [
+      {
+        "run_id": "ff50890cae3440288d58105df7be4816",
+        "status": "READY",
+        "version": 1
+      },
+      {
+        "run_id": "5626d9eb38a446fcaed2a759ab035a78",
+        "status": "READY",
+        "version": 2
+      },
+      {
+        "run_id": "5de918fc7b764abfbb4b9f62832255eb",
+        "status": "READY",
+        "version": 3
+      },
+      {
+        "run_id": "3ec4520e8fdf426485aff9ca4fff203a",
+        "status": "READY",
+        "version": 4
+      }
+    ]
+  },
+  {
+    "aliases": {
+      "candidate": 3,
+      "champion": 2
+    },
+    "audience": "staff",
+    "registered_model": "staff-department-router",
+    "versions": [
+      {
+        "run_id": "de39ff70b6d74e7e8fd67388908bf906",
+        "status": "READY",
+        "version": 1
+      },
+      {
+        "run_id": "b634d4c9380840db9b11d0f264671746",
+        "status": "READY",
+        "version": 2
+      },
+      {
+        "run_id": "ac4af861adb442e980c84eb1ea0d2785",
+        "status": "READY",
+        "version": 3
+      }
+    ]
+  }
+]

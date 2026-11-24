@@ -168,55 +168,56 @@ class PostgresRAGRepository:
                 "INSERT INTO rag_releases (release_id, audience, manifest) VALUES (%s, %s, %s)",
                 (release_id, audience, psycopg.types.json.Jsonb(manifest)),
             )
-            connection.executemany(
-                """
-                INSERT INTO rag_documents (
-                    release_id, document_id, audience, department, source, source_version,
-                    content_hash, approval_status, review_date, effective_date, access_level
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                [
-                    (
-                        release_id,
-                        doc.metadata.document_id,
-                        doc.metadata.audience,
-                        doc.metadata.department,
-                        doc.metadata.source,
-                        doc.metadata.source_version,
-                        doc.metadata.content_hash,
-                        doc.metadata.approval_status,
-                        doc.metadata.review_date,
-                        doc.metadata.effective_date,
-                        doc.metadata.access_level,
-                    )
-                    for doc in documents
-                ],
-            )
-            connection.executemany(
-                """
-                INSERT INTO rag_chunks (
-                    release_id, chunk_id, document_id, audience, department, source,
-                    source_version, access_level, ordinal, content, content_hash, embedding
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                [
-                    (
-                        release_id,
-                        chunk.chunk_id,
-                        chunk.document_id,
-                        chunk.audience,
-                        chunk.department,
-                        chunk.source,
-                        chunk.source_version,
-                        chunk.access_level,
-                        chunk.ordinal,
-                        chunk.content,
-                        chunk.content_hash,
-                        Vector(chunk.embedding),
-                    )
-                    for chunk in chunks
-                ],
-            )
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    INSERT INTO rag_documents (
+                        release_id, document_id, audience, department, source, source_version,
+                        content_hash, approval_status, review_date, effective_date, access_level
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    [
+                        (
+                            release_id,
+                            doc.metadata.document_id,
+                            doc.metadata.audience,
+                            doc.metadata.department,
+                            doc.metadata.source,
+                            doc.metadata.source_version,
+                            doc.metadata.content_hash,
+                            doc.metadata.approval_status,
+                            doc.metadata.review_date,
+                            doc.metadata.effective_date,
+                            doc.metadata.access_level,
+                        )
+                        for doc in documents
+                    ],
+                )
+                cursor.executemany(
+                    """
+                    INSERT INTO rag_chunks (
+                        release_id, chunk_id, document_id, audience, department, source,
+                        source_version, access_level, ordinal, content, content_hash, embedding
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    [
+                        (
+                            release_id,
+                            chunk.chunk_id,
+                            chunk.document_id,
+                            chunk.audience,
+                            chunk.department,
+                            chunk.source,
+                            chunk.source_version,
+                            chunk.access_level,
+                            chunk.ordinal,
+                            chunk.content,
+                            chunk.content_hash,
+                            Vector(chunk.embedding),
+                        )
+                        for chunk in chunks
+                    ],
+                )
 
     def update_manifest(self, release_id: str, manifest: dict) -> None:
         with psycopg.connect(self.database_url) as connection:
@@ -250,7 +251,7 @@ class PostgresRAGRepository:
              WHERE release_id = %(release_id)s
                AND audience = %(audience)s AND access_level = %(audience)s
                AND textsearch @@ plainto_tsquery('english', %(query)s)
-               AND (%(department)s IS NULL OR department = %(department)s)
+               AND (CAST(%(department)s AS text) IS NULL OR department = %(department)s)
              ORDER BY score DESC, chunk_id LIMIT %(limit)s
         """
         params = dict(
@@ -278,7 +279,7 @@ class PostgresRAGRepository:
               FROM rag_chunks
              WHERE release_id = %(release_id)s
                AND audience = %(audience)s AND access_level = %(audience)s
-               AND (%(department)s IS NULL OR department = %(department)s)
+               AND (CAST(%(department)s AS text) IS NULL OR department = %(department)s)
              ORDER BY embedding <=> %(embedding)s, chunk_id LIMIT %(limit)s
         """
         params = dict(

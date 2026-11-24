@@ -11,6 +11,7 @@ Not available yet. The final submission will include a public, no-sign-in demo l
 - [UV](https://docs.astral.sh/uv/) 0.11.23 or compatible
 - Git
 - Docker Desktop or Docker Engine with Compose v2
+- At least 15 GB free disk space for the unified image, service images, caches, and model weights
 - macOS or Linux (Windows users should use WSL for the documented shell commands)
 
 UV installs the pinned Python 3.12 runtime when needed. PyCharm can use `.venv/bin/python` after synchronization.
@@ -118,19 +119,26 @@ AI_SUPPORT_TEST_OLLAMA_MODEL=llama3.1:latest \
 
 ## Build and run the container
 
-Copy `.env.example` to `.env`, replace all placeholder credentials, then run:
+Copy `.env.example` to `.env` and replace all placeholder credentials. The complete clean-clone
+bootstrap is one command:
 
 ```bash
-docker compose config --quiet
-docker compose build api minio
-docker compose up -d
-docker compose ps
+./scripts/bootstrap_demo.sh --pull-model
 ```
+
+`--pull-model` is explicit authorization to download the configured Ollama model; omit it on a later
+verification when the model exists in the persistent volume. Existing selected immutable RAG releases
+are reused and the acceptance probe confirms their database indexes are still present. The command
+builds the images, starts infrastructure, trains
+and approves both routers, builds both PostgreSQL RAG indexes, starts the application/monitoring
+services, and runs an authenticated cited-answer acceptance probe. It stops immediately if a gate or
+verification fails.
 
 The lockfile-based API image runs as non-root UID/GID 10001. The chatbot is at
 `http://127.0.0.1:8501`; FastAPI is at `http://127.0.0.1:8000`. Administrative services bind
-only to loopback and PostgreSQL is not published. Install the configured Ollama model
-explicitly with `docker compose exec ollama ollama pull llama3.1:latest`.
+only to loopback and PostgreSQL is not published. Every published host port has an
+`AI_SUPPORT_*_PORT` override in `.env.example`, which permits an isolated second stack without
+stopping an existing demo.
 
 Runtime metrics are exposed at `/metrics`, scraped by Prometheus, and displayed in the
 provisioned Grafana dashboard. Build the historical experiment catalog or measure a running
@@ -138,12 +146,14 @@ health endpoint with:
 
 ```bash
 uv run ai-support catalog build
+MLFLOW_DISABLE_AGENT_HINT=1 uv run ai-support evidence export --output docs/evidence
 uv run ai-support benchmark-api --requests 100 \
   --output docs/performance-baseline.json
 ```
 
-See `docs/deployment-monitoring.md` for service layout, rollback, monitoring, and
-troubleshooting.
+See `docs/operations-report.md` for the complete architecture, release, scalability, monitoring,
+maintenance, security, cost, limitations, rollback, and reflection record. The shorter
+`docs/deployment-monitoring.md` remains the operator quick reference.
 
 ## Call the service
 
@@ -217,6 +227,8 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 │   ├── router-pipeline.md        # Execution, tracking, reproduction, rollback
 │   ├── implementation-log.md     # Changes from the Assessment 2 design
 │   ├── deployment-monitoring.md  # Compose, telemetry, performance, and rollback
+│   ├── operations-report.md       # Complete Assessment 3 deployment/operations report
+│   ├── evidence/                  # Tracked DVC, MLflow, Metaflow, and run provenance
 │   └── reference/                # Supplied assessment PDFs
 ├── src/ai_support/
 │   ├── api/                      # FastAPI contracts and endpoints
@@ -230,6 +242,7 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 ├── tests/deployment/             # Metrics, catalog, rollback, and performance helpers
 ├── tests/rag/                    # RAG policy, adapter, pipeline, and API tests
 ├── tests/router/                 # Router unit, API, and registry tests
+├── scripts/bootstrap_demo.sh     # One-command clean-clone bootstrap and acceptance
 ├── pyproject.toml                # Dependencies and tool configuration
 ├── compose.yaml                  # Private-network assessment service stack
 ├── Dockerfile                    # UV-locked non-root application image
@@ -253,7 +266,7 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 - **pytest, HTTPX2, and Ruff** provide automated behavioral, integration, lint, formatting, and coverage checks.
 - **Prometheus and Grafana** collect genuine runtime telemetry and provision a versioned dashboard.
 - **Docker Compose** runs the assessment services with named storage and private backend networking.
-- **GitHub Actions** repeats the locked installation, quality checks, Compose validation, and Dockerfile validation on pushes and pull requests.
+- **GitHub Actions** repeats the locked installation, quality checks, Compose validation, real image build, non-root assertion, and container health smoke test on pushes and pull requests.
 
 The assessment deployment is single-host and intentionally does not claim production TLS,
 institutional SSO, managed secrets, multi-node availability, or automatic rollback.

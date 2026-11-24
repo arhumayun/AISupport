@@ -1,0 +1,32 @@
+[
+  {
+    "md5": "bf9a39b7075af957f272c12cc365b327.dir",
+    "path": "staff",
+    "pointer": "data/rag/staff.dvc"
+  },
+  {
+    "md5": "92d7d21f422358846a17401209fe952f.dir",
+    "path": "student",
+    "pointer": "data/rag/student.dvc"
+  },
+  {
+    "md5": "3d33bf4517f6c34683089ae57a2f0f1e",
+    "path": "evaluation.csv",
+    "pointer": "data/router/staff/evaluation.csv.dvc"
+  },
+  {
+    "md5": "e97cb3a2a671754bf12ea3a2ccea16cf",
+    "path": "tickets.csv",
+    "pointer": "data/router/staff/tickets.csv.dvc"
+  },
+  {
+    "md5": "90626413b4eda17bdf4c2459dd3966f1",
+    "path": "evaluation.csv",
+    "pointer": "data/router/student/evaluation.csv.dvc"
+  },
+  {
+    "md5": "cad57fa7d7afd1f981fc6faf0593bdd7",
+    "path": "tickets.csv",
+    "pointer": "data/router/student/tickets.csv.dvc"
+  }
+]

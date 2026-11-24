@@ -36,7 +36,7 @@ jobs:
 
   deployment-config:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -44,5 +44,18 @@ jobs:
       - name: Validate Compose model
         run: docker compose config --quiet
 
-      - name: Validate application Dockerfile
-        run: docker build --check .
+      - name: Build application image from lockfile
+        run: docker build --build-arg AI_SUPPORT_GIT_COMMIT=${{ github.sha }} --tag uowd-ai-support:ci .
+
+      - name: Verify non-root image user
+        run: test "$(docker image inspect uowd-ai-support:ci --format '{{.Config.User}}')" = "10001:10001"
+
+      - name: Start application image
+        run: docker run --detach --name uowd-ai-support-ci --publish 127.0.0.1:18000:8000 uowd-ai-support:ci
+
+      - name: Smoke-test container health
+        run: curl --fail --retry 30 --retry-delay 1 --retry-all-errors http://127.0.0.1:18000/health
+
+      - name: Remove smoke-test container
+        if: always()
+        run: docker rm --force uowd-ai-support-ci || true

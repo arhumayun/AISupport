@@ -2,15 +2,16 @@
 
 ## Configure and start
 
-Copy `.env.example` to `.env`, replace all credential and session placeholders, then validate
-and start the stack:
+Copy `.env.example` to `.env`, replace all credential and session placeholders, then run the
+complete build, model/index bootstrap, startup, and authenticated acceptance verification:
 
 ```bash
-docker compose config --quiet
-docker compose build api minio
-docker compose up -d
-docker compose ps
+./scripts/bootstrap_demo.sh --pull-model
 ```
+
+Omit `--pull-model` after the configured model is present in the Ollama volume. See
+`operations-report.md` for the release gate, alert thresholds, maintenance ownership, cost,
+limitations, and reflection.
 
 The application is available at Streamlit `127.0.0.1:8501` and FastAPI
 `127.0.0.1:8000`. MLflow (`5050`), MinIO (`9000`/`9001`), Prometheus (`9090`), Grafana
@@ -19,6 +20,10 @@ not published. Compose's `backend` network is internal; services with loopback p
 join a separate admin bridge because Docker cannot publish a port from an internal-only
 network. Replace the assessment passwords; the defaults are intentionally conspicuous and
 unsuitable for a shared host.
+
+All published host ports can be changed with the `AI_SUPPORT_*_PORT` settings listed in
+`.env.example`. Internal service ports and service-to-service URLs do not change. This is useful for
+an isolated rehearsal when another local stack already owns a default loopback port.
 
 MLflow uses host port `5050` because macOS AirPlay commonly reserves `5000`; it still listens
 on port `5000` inside the private Compose network.

@@ -13,6 +13,7 @@ from ai_support.router.tracking import (
     approve_model,
     dvc_hash,
     file_sha256,
+    git_metadata,
     load_registered_model,
     track_and_register,
 )
@@ -65,3 +66,10 @@ def test_hash_helpers_report_tracked_and_untracked_data(tmp_path: Path) -> None:
     data.write_text("content", encoding="utf-8")
     assert dvc_hash(data).startswith("untracked:")
     assert len(file_sha256(data)) == 64
+
+
+def test_container_git_metadata_uses_build_provenance(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("AI_SUPPORT_GIT_COMMIT", "abc123")
+    monkeypatch.setenv("AI_SUPPORT_GIT_DIRTY", "false")
+
+    assert git_metadata(tmp_path) == ("abc123", False)

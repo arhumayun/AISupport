@@ -64,15 +64,26 @@ def test_attach_embeddings_rejects_count_mismatch(tmp_path: Path) -> None:
 
 
 class _Cursor:
-    def __init__(self, rows=None, one=None) -> None:
+    def __init__(self, rows=None, one=None, statements=None) -> None:
         self.rows = rows or []
         self.one = one
+        self.statements = statements
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
 
     def fetchall(self):
         return self.rows
 
     def fetchone(self):
         return self.one
+
+    def executemany(self, sql, params) -> None:
+        assert self.statements is not None
+        self.statements.append((str(sql), list(params)))
 
 
 class _Connection:
@@ -106,8 +117,8 @@ class _Connection:
             )
         return _Cursor()
 
-    def executemany(self, sql, params) -> None:
-        self.statements.append((str(sql), list(params)))
+    def cursor(self):
+        return _Cursor(statements=self.statements)
 
 
 def test_postgres_repository_enforces_policy_in_queries_and_uses_pgvector(
@@ -138,6 +149,7 @@ def test_postgres_repository_enforces_policy_in_queries_and_uses_pgvector(
     assert dense[0].score == 0.75
     combined_sql = "\n".join(statement for statement, _ in connection.statements)
     assert "audience = %(audience)s AND access_level = %(audience)s" in combined_sql
+    assert "CAST(%(department)s AS text) IS NULL" in combined_sql
     assert "plainto_tsquery" in combined_sql
     assert "embedding <=>" in combined_sql
     assert "INSERT INTO rag_documents" in combined_sql
