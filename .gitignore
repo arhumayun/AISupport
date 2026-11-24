@@ -1,0 +1,21 @@
+.DS_Store
+.env
+.idea/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.coverage
+coverage.xml
+htmlcov/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Local MLOps/runtime state (added in later phases)
+.dvc/cache/
+artifacts/
+data/processed/
+mlartifacts/
+mlruns/
