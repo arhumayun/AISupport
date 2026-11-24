@@ -20,7 +20,7 @@ Services: PostgreSQL/pgvector, Ollama, MinIO/local DVC storage, Mailpit
 1. **Foundation (implemented):** UV/Python project, typed health API, logging, tests, and CI.
 2. **Router ML pipelines (implemented):** deterministic synthetic tickets, independent student/staff Metaflow flows, DVC, MLflow, validation gates, registration, and prediction API.
 3. **Student/staff RAG (implemented):** document validation, parsing, configurable chunking and embeddings, hybrid retrieval, evaluation, and immutable release manifests.
-4. **Chatbot and agents:** synthetic authentication, Ollama/LangGraph, Streamlit, authorized profile tools, confirmed Mailpit email, and handoff.
+4. **Chatbot and agents (implemented):** synthetic authentication, Ollama/LangGraph, Streamlit, authorized profile tools, confirmed Mailpit email, and handoff.
 5. **Deployment and monitoring:** lockfile-based images, Compose services, Prometheus/Grafana, integration/performance tests, and rollback demonstration.
 
 Only components listed as implemented are currently available.
@@ -59,10 +59,24 @@ synthetic generator (fixed seed, 12 months)
 
 The final resolving department is the supervised target. The original assigned department remains a noisy historical field. Intent is produced by a documented rule taxonomy and is not inferred from department assignment.
 
+## Phase 4 controlled-agent architecture
+
+```text
+synthetic ID + login code -> FastAPI verification -> signed expiring session
+  -> session audience/user ID -> deterministic LangGraph policy
+     |-> audience-specific router + RAG -> Ollama evidence-only answer
+     |-> session-bound student/staff profile -> deterministic response
+     |-> clarification request -> redacted draft -> explicit confirmation -> Mailpit
+     |-> low confidence/restriction/failure -> official handoff + hashed gap
+```
+
+Ollama never selects tools. Rules in the graph classify the limited supported intents; each tool independently checks the authenticated principal. Retrieved text is placed in an untrusted-evidence section and cannot alter authorization or trigger an action. Email drafts are stored against a session, expire after 15 minutes, use fixed `example.test` recipients, and are one-time actions after successful delivery.
+
 ## Security baseline
 
 - Configuration examples contain no credentials.
 - Logs contain operational events, not prompts, raw personal records, or secrets.
-- The router and RAG endpoints are internal; Phase 4 must enforce authenticated audience selection before chatbot use.
-- Future side effects require explicit user confirmation and an audit event.
+- Router, RAG, chat, feedback, and confirmation endpoints require a signed backend session. Audience path parameters must match its audience.
+- Side effects require explicit user confirmation and produce privacy-safe audit metadata.
 - Retrieved documents are returned as untrusted evidence with citations, never as executable instructions.
+- Personal tools derive their record key from the session and never accept a caller-supplied student or staff ID.

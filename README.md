@@ -1,6 +1,6 @@
 # UOWD AI Support Assistant
 
-The UOWD AI Support Assistant is a reproducible student-and-staff support system combining supervised department routing, permission-filtered RAG, and controlled agent tools. The repository currently implements **Phases 1–3**: a UV-managed FastAPI foundation, independent department routers, and isolated student/staff hybrid-retrieval pipelines orchestrated with Metaflow and tracked in MLflow.
+The UOWD AI Support Assistant is a reproducible student-and-staff support system combining supervised department routing, permission-filtered RAG, and controlled agent tools. The repository currently implements **Phases 1–4**: a UV-managed FastAPI foundation, independent department routers and RAG releases, and an authenticated LangGraph/Ollama chatbot with a Streamlit interface.
 
 ## Demo video
 
@@ -84,6 +84,21 @@ The first real build downloads the configured, revision-pinned Sentence Transfor
 
 See `docs/rag-pipeline.md` for metadata, experiments, metrics, SQL setup, and release restoration.
 
+## Run the authenticated chatbot
+
+Copy `.env.example` to `.env`, replace the synthetic login code and session-secret placeholders, and export the variables into the shell running the API. The backend—not the Streamlit audience selector—verifies the identity and derives the available router, knowledge base, profile, and tools.
+
+Start the required local services and an already-installed Ollama model. Phase 5 will provide the Compose stack; Phase 4 does not automatically download a model or start infrastructure.
+
+```bash
+uv run uvicorn ai_support.api.app:app --reload
+uv run streamlit run src/ai_support/ui/app.py
+```
+
+Synthetic demo identities are `S100001`/`S100002` for students and `E100001`/`E100002` for staff. All use the configured `AI_SUPPORT_DEMO_LOGIN_CODE`. The chatbot supports session chat history, cited retrieval answers, authenticated profiles, student course progress, reviewable department-email drafts, explicit Mailpit confirmation, human handoff, and helpful/not-helpful feedback.
+
+Detailed security, tool, Ollama, Mailpit, and API instructions are in `docs/chatbot-agents.md`.
+
 ## Run tests and quality checks
 
 ```bash
@@ -93,11 +108,16 @@ uv run pytest
 uv run dvc status
 ```
 
-The automated suite trains small deterministic models and uses a temporary real MLflow SQLite registry for registration, alias, and version-loading tests. It does not require Ollama or external model downloads.
+The automated suite trains small deterministic models and uses a temporary real MLflow SQLite registry for registration, alias, and version-loading tests. It mocks LLM responses and does not require Ollama or external model downloads. An opt-in real test uses an already-installed model:
+
+```bash
+AI_SUPPORT_TEST_OLLAMA_MODEL=llama3.1:latest \
+  uv run pytest -q tests/agents/test_adapters.py::test_real_ollama_demo_model --no-cov
+```
 
 ## Build and run the container
 
-Container images and Docker Compose are planned for Phase 5. They are deliberately absent at the end of Phase 3.
+Container images and Docker Compose are planned for Phase 5. They are deliberately absent at the end of Phase 4.
 
 ## Call the service
 
@@ -107,10 +127,21 @@ Health request:
 curl --fail http://127.0.0.1:8000/health
 ```
 
+Authenticate first:
+
+```bash
+curl --fail -X POST http://127.0.0.1:8000/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":"S100001","login_code":"your-synthetic-code"}'
+```
+
+Use the returned bearer token for router, RAG, chat, action-confirmation, and feedback requests. The server rejects a student token on staff routes and vice versa.
+
 Router request:
 
 ```bash
 curl --fail -X POST http://127.0.0.1:8000/v1/router/student/predict \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"ticket_subject":"Timetable missing","ticket_description":"I cannot see my class timetable"}'
 ```
@@ -132,12 +163,11 @@ Example response from the measured Phase 2 champion:
 }
 ```
 
-This router endpoint is an internal model interface, not end-user authentication. Phase 4 will add server-verified synthetic identities before exposing router selection through the chatbot.
-
-The RAG search endpoint is likewise internal. It returns only stored evidence and citations; answer generation and authenticated chatbot access belong to Phase 4:
+The RAG endpoint also requires the matching server-issued session:
 
 ```bash
 curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"query":"I cannot see my timetable","department":"Registry"}'
 ```
@@ -150,19 +180,25 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 ├── .github/workflows/ci.yml      # Locked install, lint, and test automation
 ├── configs/rag/                  # Separate chunking/embedding/retrieval settings
 ├── configs/router/               # Separate student/staff model and gate settings
+├── data/app/                     # Seeded synthetic profiles
 ├── data/rag/                     # DVC-versioned documents and benchmarks
 ├── data/router/                  # DVC pointers; CSV contents remain out of Git
 ├── docs/
 │   ├── architecture/overview.md  # Target architecture and phase boundaries
+│   ├── chatbot-agents.md         # Authentication, tools, UI, Ollama, Mailpit
 │   ├── rag-pipeline.md           # RAG experiments, releases, and restoration
 │   ├── router-pipeline.md        # Execution, tracking, reproduction, rollback
 │   ├── implementation-log.md     # Changes from the Assessment 2 design
 │   └── reference/                # Supplied assessment PDFs
 ├── src/ai_support/
 │   ├── api/                      # FastAPI contracts and endpoints
+│   ├── agents/                   # LangGraph, tools, profiles, actions, adapters
 │   ├── pipelines/                # Four independent Metaflow workflows
 │   ├── rag/                      # Ingestion, chunking, retrieval, evaluation
-│   └── router/                   # Data, preprocessing, model, metrics, registry
+│   ├── router/                   # Data, preprocessing, model, metrics, registry
+│   ├── security/                 # Signed synthetic sessions
+│   └── ui/                       # Streamlit app and API client
+├── tests/agents/                 # Authorization, graph, adapter, and API tests
 ├── tests/rag/                    # RAG policy, adapter, pipeline, and API tests
 ├── tests/router/                 # Router unit, API, and registry tests
 ├── pyproject.toml                # Dependencies and tool configuration
@@ -178,11 +214,15 @@ curl --fail -X POST http://127.0.0.1:8000/v1/rag/student/search \
 - **scikit-learn** provides the explainable TF-IDF plus logistic-regression baseline.
 - **sentence-transformers** provides revision-pinned dense embeddings and an optional CrossEncoder reranker.
 - **PostgreSQL/pgvector** provides persistent dense search alongside PostgreSQL full-text search; RRF combines their ranked lists.
-- **FastAPI and Pydantic** expose typed health and router prediction contracts.
+- **LangGraph** executes a controlled, allow-listed workflow; policy code, not the LLM, chooses tools.
+- **Ollama** generates evidence-grounded text with a structured-output schema.
+- **Streamlit** provides authenticated session chat, citations, confirmation, and feedback controls.
+- **Mailpit SMTP** receives only confirmed messages addressed to synthetic `example.test` recipients.
+- **FastAPI and Pydantic** expose typed authentication, routing, retrieval, chat, action, and feedback contracts.
 - **pytest, HTTPX2, and Ruff** provide automated behavioral, integration, lint, formatting, and coverage checks.
 - **GitHub Actions** repeats the locked installation and quality checks on pushes and pull requests.
 
-Ollama, LangGraph, Streamlit, Prometheus/Grafana, Mailpit, and Docker Compose remain later-phase work.
+Prometheus/Grafana and Docker Compose remain Phase 5 work. Mailpit and PostgreSQL adapters are implemented, but their managed services arrive with that Compose stack.
 
 ## Team and contributions
 

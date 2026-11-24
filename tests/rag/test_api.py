@@ -4,6 +4,12 @@ from fastapi.testclient import TestClient
 
 from ai_support.api.app import create_app
 from ai_support.rag.schema import SearchResult
+from ai_support.security.auth import Principal
+
+
+class FakeAuthService:
+    def verify(self, token: str) -> Principal:
+        return Principal("S100001", "student", "student-sid")
 
 
 class FakeRAGService:
@@ -25,9 +31,11 @@ class FakeRAGService:
 def test_rag_api_returns_cited_audience_scoped_results() -> None:
     app = create_app()
     app.state.rag_service = FakeRAGService()
+    app.state.auth_service = FakeAuthService()
     response = TestClient(app).post(
         "/v1/rag/student/search",
         json={"query": "Where is my timetable?", "department": "Registry"},
+        headers={"Authorization": "Bearer student"},
     )
 
     assert response.status_code == 200
@@ -37,7 +45,18 @@ def test_rag_api_returns_cited_audience_scoped_results() -> None:
 
 def test_rag_api_requires_database_configuration_and_valid_input() -> None:
     app = create_app()
+    app.state.auth_service = FakeAuthService()
     client = TestClient(app)
-    assert client.post("/v1/rag/student/search", json={"query": "valid"}).status_code == 503
-    assert client.post("/v1/rag/student/search", json={"query": ""}).status_code == 422
-    assert client.post("/v1/rag/visitor/search", json={"query": "valid"}).status_code == 422
+    headers = {"Authorization": "Bearer student"}
+    assert (
+        client.post("/v1/rag/student/search", json={"query": "valid"}, headers=headers).status_code
+        == 503
+    )
+    assert (
+        client.post("/v1/rag/student/search", json={"query": ""}, headers=headers).status_code
+        == 422
+    )
+    assert (
+        client.post("/v1/rag/visitor/search", json={"query": "valid"}, headers=headers).status_code
+        == 422
+    )

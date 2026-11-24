@@ -58,3 +58,33 @@ class RAGSearchResult(BaseModel):
 class RAGSearchResponse(BaseModel):
     audience: Literal["student", "staff"]
     results: list[RAGSearchResult]
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    user_id: str = Field(min_length=1, max_length=30)
+    login_code: str = Field(min_length=1, max_length=200)
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
+    audience: Literal["student", "staff"]
+    user_id: str
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    message: str = Field(min_length=1, max_length=3000)
+
+
+class FeedbackRequest(BaseModel):
+    message_id: str = Field(min_length=1, max_length=100)
+    helpful: bool
+
+
+class FeedbackResponse(BaseModel):
+    recorded: Literal[True] = True

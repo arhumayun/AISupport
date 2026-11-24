@@ -62,3 +62,27 @@ Pinned-model Metaflow runs produced student release `ae122094e87aa5d47549352f` a
 - The second embedding profile and optional CrossEncoder path are configurable and unit-tested with local doubles, but the measured release comparison used only MiniLM to avoid unnecessary downloads.
 - Release status is `candidate`; there is no automatic production promotion or rollback.
 - The internal audience path is not authentication. Server-verified synthetic identities and the chatbot authorization boundary remain Phase 4 work.
+
+## 2026-11-24 - Phase 4 chatbot and controlled agents
+
+- Added server-verified synthetic student/staff login with expiring HMAC-signed bearer sessions. Audience and profile identity are derived from the verified session.
+- Added a seeded SQLite synthetic profile store and authorized student profile, course-progress, and staff-profile tools.
+- Added a deterministic LangGraph workflow connecting the router, audience-filtered RAG, profile tools, clarification drafts, handoff, and privacy-safe knowledge-gap recording.
+- Added structured Ollama answer generation. Retrieved documents are explicitly treated as untrusted evidence, and the model cannot select tools or authorize actions.
+- Added synthetic department email drafts with identifier/email redaction, fixed `example.test` recipients, session ownership, 15-minute expiry, explicit confirmation, one-time delivery, Mailpit SMTP, and audit events.
+- Added human handoff to current official UOWD support pages when requested, restricted, low-confidence, empty, or unavailable.
+- Added a Streamlit chatbot with persistent session history, citations, profile responses, email review/confirmation, handoff links, sign-out, and helpful/not-helpful feedback.
+- Protected the previously internal router and RAG endpoints with the same signed session and audience-match checks.
+
+### Verified development result
+
+The full automated suite passes with mocked LLM responses and no model download. A separate opt-in integration test passed against the locally installed `llama3.1:latest` model through the real Ollama server. Authorization, prompt-injection evidence, student/staff separation, profile ownership, redaction, confirmation, one-time actions, adapter failures, API contracts, and privacy-safe records are covered.
+
+### Known Phase 4 limitations
+
+- Synthetic login uses a shared assessment code and local HMAC secret; institutional SSO/OIDC, revocation, key rotation, and durable server-side sessions are future production enhancements.
+- Mailpit delivery is implemented and mocked in automation, but Mailpit is not installed locally; the managed service belongs to Phase 5 Compose.
+- Runtime RAG answers still require a persistent PostgreSQL/pgvector index. Without `AI_SUPPORT_DATABASE_URL`, the controlled workflow safely hands off instead of inventing an answer.
+- Conversation history is session-local in Streamlit and is not persisted across browser sessions.
+- The intent taxonomy is deliberately narrow and deterministic. More advanced intent handling requires separate evaluation before expansion.
+- Prometheus/Grafana telemetry, containers, performance tests, and deployment hardening remain Phase 5 work.

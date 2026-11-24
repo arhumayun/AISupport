@@ -2,25 +2,36 @@
 
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from mlflow.exceptions import MlflowException
 from psycopg import Error as PsycopgError
 
 from ai_support import __version__
+from ai_support.agents.actions import ActionAuthorizationError, FeedbackAuthorizationError
+from ai_support.agents.schema import AgentReply, EmailReceipt
+from ai_support.agents.service import EmailDeliveryError
 from ai_support.api.models import (
+    ChatRequest,
     DepartmentProbability,
+    FeedbackRequest,
+    FeedbackResponse,
     HealthResponse,
+    LoginRequest,
+    LoginResponse,
     RAGSearchRequest,
     RAGSearchResponse,
     RAGSearchResult,
     RouterPredictionRequest,
     RouterPredictionResponse,
 )
+from ai_support.api.runtime import create_phase4_services
 from ai_support.logging import configure_logging
 from ai_support.rag.service import RAGService
 from ai_support.router.service import RouterService
+from ai_support.security.auth import AuthenticationError, Principal
 
 SERVICE_NAME = "uowd-ai-support-api"
 
@@ -39,12 +50,47 @@ def create_app() -> FastAPI:
     )
     database_url = os.getenv("AI_SUPPORT_DATABASE_URL")
     application.state.rag_service = RAGService(Path.cwd(), database_url) if database_url else None
+    auth_service, chat_service = create_phase4_services(Path.cwd())
+    application.state.auth_service = auth_service
+    application.state.chat_service = chat_service
+    bearer = HTTPBearer(auto_error=False)
+
+    def current_principal(
+        request: Request,
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    ) -> Principal:
+        if request.app.state.auth_service is None:
+            raise HTTPException(status_code=503, detail="authentication is not configured")
+        if credentials is None:
+            raise HTTPException(status_code=401, detail="bearer session required")
+        try:
+            return request.app.state.auth_service.verify(credentials.credentials)
+        except AuthenticationError as error:
+            raise HTTPException(status_code=401, detail=str(error)) from error
 
     @application.get("/health", response_model=HealthResponse, tags=["operations"])
     async def health() -> HealthResponse:
         """Report that the API process is ready to accept requests."""
 
         return HealthResponse(service=SERVICE_NAME, version=__version__)
+
+    @application.post("/v1/auth/login", response_model=LoginResponse, tags=["authentication"])
+    async def login(payload: LoginRequest, request: Request) -> LoginResponse:
+        """Exchange verified synthetic assessment credentials for a signed session."""
+
+        service = request.app.state.auth_service
+        if service is None:
+            raise HTTPException(status_code=503, detail="authentication is not configured")
+        try:
+            token, principal, ttl = service.login(payload.user_id, payload.login_code)
+        except AuthenticationError as error:
+            raise HTTPException(status_code=401, detail="invalid synthetic credentials") from error
+        return LoginResponse(
+            access_token=token,
+            expires_in=ttl,
+            audience=principal.audience,
+            user_id=principal.user_id,
+        )
 
     @application.post(
         "/v1/router/{audience}/predict",
@@ -55,9 +101,12 @@ def create_app() -> FastAPI:
         audience: Literal["student", "staff"],
         payload: RouterPredictionRequest,
         request: Request,
+        principal: Annotated[Principal, Depends(current_principal)],
     ) -> RouterPredictionResponse:
         """Predict a department using only the selected audience's registered model."""
 
+        if principal.audience != audience:
+            raise HTTPException(status_code=403, detail="audience access denied")
         try:
             prediction = request.app.state.router_service.predict(
                 audience,
@@ -89,9 +138,12 @@ def create_app() -> FastAPI:
         audience: Literal["student", "staff"],
         payload: RAGSearchRequest,
         request: Request,
+        principal: Annotated[Principal, Depends(current_principal)],
     ) -> RAGSearchResponse:
         """Search only the selected audience's approved immutable release."""
 
+        if principal.audience != audience:
+            raise HTTPException(status_code=403, detail="audience access denied")
         service = request.app.state.rag_service
         if service is None:
             raise HTTPException(status_code=503, detail="RAG database is not configured")
@@ -116,6 +168,61 @@ def create_app() -> FastAPI:
                 for result in results
             ],
         )
+
+    @application.post("/v1/chat", response_model=AgentReply, tags=["chat"])
+    async def chat(
+        payload: ChatRequest,
+        request: Request,
+        principal: Annotated[Principal, Depends(current_principal)],
+    ) -> AgentReply:
+        """Run the controlled workflow using the verified session audience and identity."""
+
+        service = request.app.state.chat_service
+        if service is None:
+            raise HTTPException(status_code=503, detail="chat service is not configured")
+        try:
+            return service.respond(principal, payload.message)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail="agent tool access denied") from error
+
+    @application.post(
+        "/v1/actions/{action_id}/confirm",
+        response_model=EmailReceipt,
+        tags=["chat"],
+    )
+    async def confirm_action(
+        action_id: str,
+        request: Request,
+        principal: Annotated[Principal, Depends(current_principal)],
+    ) -> EmailReceipt:
+        """Explicitly confirm and send one session-owned email draft through Mailpit."""
+
+        service = request.app.state.chat_service
+        if service is None:
+            raise HTTPException(status_code=503, detail="chat service is not configured")
+        try:
+            return service.confirm_email(principal, action_id)
+        except ActionAuthorizationError as error:
+            raise HTTPException(status_code=404, detail="pending action unavailable") from error
+        except EmailDeliveryError as error:
+            raise HTTPException(
+                status_code=503, detail="synthetic email delivery failed"
+            ) from error
+
+    @application.post("/v1/feedback", response_model=FeedbackResponse, tags=["chat"])
+    async def feedback(
+        payload: FeedbackRequest,
+        request: Request,
+        principal: Annotated[Principal, Depends(current_principal)],
+    ) -> FeedbackResponse:
+        service = request.app.state.chat_service
+        if service is None:
+            raise HTTPException(status_code=503, detail="chat service is not configured")
+        try:
+            service.record_feedback(principal, payload.message_id, payload.helpful)
+        except FeedbackAuthorizationError as error:
+            raise HTTPException(status_code=404, detail="message unavailable") from error
+        return FeedbackResponse()
 
     return application
 

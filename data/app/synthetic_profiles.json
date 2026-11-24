@@ -1,0 +1,40 @@
+{
+  "students": [
+    {
+      "user_id": "S100001",
+      "name": "Amina Rahman",
+      "programme": "Bachelor of Computer Science",
+      "course": "Software Engineering",
+      "enrolment_status": "Active",
+      "completed_subjects": ["CSIT111", "CSIT121", "CSIT127", "MATH121"],
+      "remaining_subjects": ["CSIT214", "CSIT226", "CSIT314", "CSIT321"],
+      "progress_percentage": 50.0
+    },
+    {
+      "user_id": "S100002",
+      "name": "Omar Hassan",
+      "programme": "Master of Business Analytics",
+      "course": "Business Analytics",
+      "enrolment_status": "Active",
+      "completed_subjects": ["MBAS901", "MBAS902", "MBAS903"],
+      "remaining_subjects": ["MBAS904", "MBAS905", "MBAS906"],
+      "progress_percentage": 50.0
+    }
+  ],
+  "staff": [
+    {
+      "user_id": "E100001",
+      "name": "Dr Layla Karim",
+      "job_title": "Lecturer",
+      "department": "Computer Science",
+      "employment_status": "Active"
+    },
+    {
+      "user_id": "E100002",
+      "name": "Samir Patel",
+      "job_title": "Programme Coordinator",
+      "department": "Registry",
+      "employment_status": "Active"
+    }
+  ]
+}
